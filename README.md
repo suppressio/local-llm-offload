@@ -16,11 +16,6 @@ client-specific about it: the same process
 depending on the client, but the code never changes. See
 [Registering with an MCP client](#registering-with-an-mcp-client).
 
-**Current status**: no automatic delegation. Tools must be called
-explicitly during a session — the goal of this phase is to validate that
-the bridge works and that the token savings are real, before automating
-any further.
-
 ## Exposed tools
 
 - **`delegate_to_local_llm(prompt, model?, context_files?)`** — sends a

@@ -16,11 +16,6 @@ specifico per un client in particolare: lo stesso processo
 seconda del client, ma il codice non cambia. Vedi
 [Registrazione in un client MCP](#registrazione-in-un-client-mcp).
 
-**Stato attuale**: nessuna delegazione automatica. I tool vanno richiamati
-esplicitamente durante una sessione — l'obiettivo di questa fase è
-validare che il ponte funzioni e che il risparmio di token sia reale,
-prima di automatizzare oltre.
-
 ## Tool esposti
 
 - **`delegate_to_local_llm(prompt, model?, context_files?)`** — invia un
