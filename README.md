@@ -1,16 +1,23 @@
 # local-llm-offload
 
-Server MCP che fa da ponte tra [Claude Code](https://claude.com/claude-code)
-e un server [Ollama](https://ollama.com) in LAN, per delegare a modelli
-locali i task meccanici a basso rischio (spiegazioni di codice,
-documentazione, refactor banali, riassunti) e ridurre il consumo di token
-di Claude, tenendolo per il lavoro che richiede reasoning/architettura
-reale.
+Server [MCP](https://modelcontextprotocol.io) standard che fa da ponte tra
+un client MCP (Claude Code, GitHub Copilot in VS Code o via CLI, o
+qualunque altro client compatibile) e un server [Ollama](https://ollama.com)
+in LAN, per delegare a modelli locali i task meccanici a basso rischio
+(spiegazioni di codice, documentazione, refactor banali, riassunti) e
+ridurre il consumo di token del modello "principale", tenendolo per il
+lavoro che richiede reasoning/architettura reale.
+
+Essendo un server MCP standard (transport stdio), non c'è nulla di
+specifico per un client in particolare: lo stesso processo
+(`uv run --directory ... local-llm-offload`) si registra in modo diverso a
+seconda del client, ma il codice non cambia. Vedi
+[Registrazione in un client MCP](#registrazione-in-un-client-mcp).
 
 **Stato attuale**: nessuna delegazione automatica. I tool vanno richiamati
-esplicitamente durante una sessione Claude Code — l'obiettivo di questa
-fase è validare che il ponte funzioni e che il risparmio di token sia
-reale, prima di automatizzare oltre.
+esplicitamente durante una sessione — l'obiettivo di questa fase è
+validare che il ponte funzioni e che il risparmio di token sia reale,
+prima di automatizzare oltre.
 
 ## Tool esposti
 
@@ -36,7 +43,7 @@ uv sync
 ## Configurazione
 
 Nessun file `.env` viene caricato automaticamente dal server: le variabili
-d'ambiente vanno passate da Claude Code al momento della registrazione
+d'ambiente vanno passate dal client MCP al momento della registrazione
 (vedi sotto). `.env.example` nel repo documenta le variabili disponibili
 ed è utile per test manuali in locale.
 
@@ -48,11 +55,29 @@ ed è utile per test manuali in locale.
 | `MAX_CONTEXT_FILE_CHARS`   | `20000`                    | Cap per singolo file passato in `context_files`                    |
 | `MAX_TOTAL_CONTEXT_CHARS`  | `60000`                    | Cap totale su tutti i `context_files` combinati                    |
 
-## Registrazione come MCP server in Claude Code
+## Registrazione in un client MCP
 
-### Linux / macOS
+### Setup una tantum per macchina
 
-Dalla root del repo (dopo `uv sync`):
+Serve prima di registrare il server in qualunque client:
+
+1. Installa `uv`:
+   - Linux/macOS: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+   - Windows (PowerShell): `irm https://astral.sh/uv/install.ps1 | iex`
+2. Clona il repo (privato — serve un account GitHub autorizzato, via
+   `gh auth login` o una chiave SSH configurata sulla macchina):
+   ```bash
+   git clone https://github.com/suppressio/local-llm-offload.git
+   cd local-llm-offload
+   uv sync
+   ```
+3. Verifica che il server Ollama in LAN sia raggiungibile dalla macchina
+   (sostituisci con l'IP reale):
+   ```bash
+   curl http://192.168.1.50:11434/api/tags
+   ```
+
+### Claude Code
 
 ```bash
 claude mcp add local-llm-offload -s user \
@@ -61,55 +86,82 @@ claude mcp add local-llm-offload -s user \
   -- uv run --directory /percorso/assoluto/local-llm-offload local-llm-offload
 ```
 
-### Windows
+Windows (PowerShell): stesso comando, con `` ` `` al posto di `\` per
+andare a capo e un percorso Windows (es. `C:\Dev\local-llm-offload`).
 
-Prerequisiti (una tantum):
+`-s user` rende il server disponibile in tutte le sessioni Claude Code
+sulla macchina, non solo nel progetto corrente.
 
-1. Installa `uv` (PowerShell):
-   ```powershell
-   irm https://astral.sh/uv/install.ps1 | iex
-   ```
-2. Clona il repo (privato — serve un account GitHub autorizzato, via `gh auth login` o una chiave SSH configurata):
-   ```powershell
-   git clone https://github.com/suppressio/local-llm-offload.git C:\Dev\local-llm-offload
-   cd C:\Dev\local-llm-offload
-   uv sync
-   ```
-3. Verifica che il server Ollama in LAN sia raggiungibile dalla macchina Windows (sostituisci con l'IP reale):
-   ```powershell
-   curl http://192.168.1.50:11434/api/tags
-   ```
-
-Poi registra il server in Claude Code:
-
-```powershell
-claude mcp add local-llm-offload -s user `
-  --env OLLAMA_HOST=http://192.168.1.50:11434 `
-  --env OLLAMA_DEFAULT_MODEL=qwen2.5-coder:7b `
-  -- uv run --directory C:\Dev\local-llm-offload local-llm-offload
-```
-
-`-s user` rende il server disponibile in tutte le sessioni Claude Code su
-quella macchina, non solo nel progetto corrente. `OLLAMA_HOST` deve puntare
-all'IP LAN reale del server Ollama (mai `localhost`, a meno che Ollama non
-giri sulla stessa macchina Windows).
-
-### Verifica
+Verifica con:
 
 ```bash
 claude mcp list
 claude mcp get local-llm-offload
 ```
 
-I tool MCP vengono caricati all'avvio di una sessione Claude Code: se la
-registrazione avviene mentre una sessione è già aperta, serve aprirne una
-nuova perché `delegate_to_local_llm` e `list_local_models` compaiano tra
-gli strumenti disponibili.
+### GitHub Copilot Chat in VS Code (agent mode)
+
+Crea `.vscode/mcp.json` nel workspace (oppure, per renderlo disponibile in
+tutti i progetti, apri la Command Palette → "MCP: Open User
+Configuration"):
+
+```json
+{
+  "servers": {
+    "local-llm-offload": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--directory", "/percorso/assoluto/local-llm-offload", "local-llm-offload"],
+      "env": {
+        "OLLAMA_HOST": "http://192.168.1.50:11434",
+        "OLLAMA_DEFAULT_MODEL": "qwen2.5-coder:7b"
+      }
+    }
+  }
+}
+```
+
+### GitHub Copilot CLI
+
+In `~/.copilot/mcp-config.json` (nota: qui la chiave radice è
+`mcpServers`, non `servers`):
+
+```json
+{
+  "mcpServers": {
+    "local-llm-offload": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--directory", "/percorso/assoluto/local-llm-offload", "local-llm-offload"],
+      "env": {
+        "OLLAMA_HOST": "http://192.168.1.50:11434",
+        "OLLAMA_DEFAULT_MODEL": "qwen2.5-coder:7b"
+      }
+    }
+  }
+}
+```
+
+### Nota: Copilot coding agent (cloud) non è supportato
+
+Il "coding agent" di GitHub Copilot (quello a cui assegni una issue e che
+lavora in una sandbox su GitHub) gira nel cloud di GitHub, non sulla tua
+LAN: non può raggiungere `OLLAMA_HOST` a meno di esporre Ollama su
+internet, cosa sconsigliata per sicurezza. Le configurazioni sopra
+valgono per client che girano localmente sulla tua macchina (Claude Code,
+VS Code, Copilot CLI).
+
+### Dopo la registrazione
+
+I tool MCP vengono caricati all'avvio di una sessione: se la registrazione
+avviene mentre una sessione è già aperta, serve aprirne una nuova perché
+`delegate_to_local_llm` e `list_local_models` compaiano tra gli strumenti
+disponibili.
 
 ## Esempi d'uso
 
-Durante una sessione Claude Code, richiama esplicitamente i tool via MCP,
-ad esempio:
+Durante una sessione con un client MCP (Claude Code, Copilot Chat in
+agent mode, ecc.), richiama esplicitamente i tool, ad esempio:
 
 > "Usa `list_local_models` per vedere cosa c'è disponibile su Ollama."
 
@@ -133,6 +185,6 @@ uv run pytest
 
 ## Roadmap
 
-- [ ] Delegazione automatica (Claude decide quando instradare a Ollama)
+- [ ] Delegazione automatica (il client decide quando instradare a Ollama)
 - [ ] Streaming delle risposte
-- [ ] Metriche di risparmio token/tempo per confrontare Claude vs LLM locale
+- [ ] Metriche di risparmio token/tempo per confrontare modello principale vs LLM locale
