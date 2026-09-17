@@ -1,0 +1,25 @@
+[project]
+name = "local-llm-offload"
+version = "0.1.0"
+description = "MCP server bridging Claude Code to a local Ollama instance for mechanical, low-risk tasks"
+readme = "README.md"
+authors = [
+    { name = "suppressio", email = "daniele@suppressio.net" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp[cli]>=2.2.0",
+]
+
+[project.scripts]
+local-llm-offload = "local_llm_offload:main"
+
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

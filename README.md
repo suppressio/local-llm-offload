@@ -1,0 +1,108 @@
+# local-llm-offload
+
+Server MCP che fa da ponte tra [Claude Code](https://claude.com/claude-code)
+e un server [Ollama](https://ollama.com) in LAN, per delegare a modelli
+locali i task meccanici a basso rischio (spiegazioni di codice,
+documentazione, refactor banali, riassunti) e ridurre il consumo di token
+di Claude, tenendolo per il lavoro che richiede reasoning/architettura
+reale.
+
+**Stato attuale**: nessuna delegazione automatica. I tool vanno richiamati
+esplicitamente durante una sessione Claude Code — l'obiettivo di questa
+fase è validare che il ponte funzioni e che il risparmio di token sia
+reale, prima di automatizzare oltre.
+
+## Tool esposti
+
+- **`delegate_to_local_llm(prompt, model?, context_files?)`** — invia un
+  prompt al server Ollama (endpoint OpenAI-compatible
+  `/v1/chat/completions`) e ritorna la risposta testuale. `context_files`
+  accetta una lista di percorsi da leggere e allegare come contesto.
+- **`list_local_models()`** — elenca i modelli installati sul server
+  Ollama (via `/api/tags` nativo).
+
+## Requisiti
+
+- Python ≥ 3.13
+- [`uv`](https://docs.astral.sh/uv/) per gestione dipendenze/esecuzione
+- Un server Ollama raggiungibile in rete (es. `192.168.1.50:11434`)
+
+## Setup
+
+```bash
+uv sync
+```
+
+## Configurazione
+
+Nessun file `.env` viene caricato automaticamente dal server: le variabili
+d'ambiente vanno passate da Claude Code al momento della registrazione
+(vedi sotto). `.env.example` nel repo documenta le variabili disponibili
+ed è utile per test manuali in locale.
+
+| Variabile                 | Default                    | Descrizione                                                       |
+|----------------------------|----------------------------|--------------------------------------------------------------------|
+| `OLLAMA_HOST`              | `http://localhost:11434`   | URL base del server Ollama (senza slash finale)                    |
+| `OLLAMA_DEFAULT_MODEL`     | `qwen2.5-coder:7b`         | Modello usato quando `delegate_to_local_llm` non specifica `model`  |
+| `OLLAMA_TIMEOUT_SECONDS`   | `120`                      | Timeout HTTP verso Ollama                                           |
+| `MAX_CONTEXT_FILE_CHARS`   | `20000`                    | Cap per singolo file passato in `context_files`                    |
+| `MAX_TOTAL_CONTEXT_CHARS`  | `60000`                    | Cap totale su tutti i `context_files` combinati                    |
+
+## Registrazione come MCP server in Claude Code
+
+Dalla root del repo:
+
+**Linux / macOS**
+
+```bash
+claude mcp add local-llm-offload \
+  --env OLLAMA_HOST=http://192.168.1.50:11434 \
+  --env OLLAMA_DEFAULT_MODEL=qwen2.5-coder:7b \
+  -- uv run --directory /percorso/assoluto/local-llm-offload local-llm-offload
+```
+
+**Windows (PowerShell)**
+
+```powershell
+claude mcp add local-llm-offload `
+  --env OLLAMA_HOST=http://192.168.1.50:11434 `
+  --env OLLAMA_DEFAULT_MODEL=qwen2.5-coder:7b `
+  -- uv run --directory C:\percorso\assoluto\local-llm-offload local-llm-offload
+```
+
+Verifica la registrazione con:
+
+```bash
+claude mcp list
+```
+
+## Esempi d'uso
+
+Durante una sessione Claude Code, richiama esplicitamente i tool via MCP,
+ad esempio:
+
+> "Usa `list_local_models` per vedere cosa c'è disponibile su Ollama."
+
+> "Usa `delegate_to_local_llm` con model `qwen2.5-coder:7b` per scrivere
+> le docstring di `src/foo.py`, passandolo come `context_files`."
+
+> "Delega a `delegate_to_local_llm` con model `qwen3-coder:30b` un
+> refactor del modulo `bar.py` per estrarre la logica di validazione in
+> una funzione separata."
+
+## Test
+
+Uno smoke test esegue chiamate reali contro il server Ollama configurato
+in `OLLAMA_HOST` (nessun mock) e viene automaticamente saltato se il
+server non è raggiungibile:
+
+```bash
+export OLLAMA_HOST=http://192.168.1.50:11434  # o: set -a && source .env && set +a
+uv run pytest
+```
+
+## Roadmap
+
+- [ ] Delegazione automatica (Claude decide quando instradare a Ollama)
+- [ ] Streaming delle risposte
+- [ ] Metriche di risparmio token/tempo per confrontare Claude vs LLM locale
