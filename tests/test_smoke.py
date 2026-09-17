@@ -54,6 +54,26 @@ def test_chat_completion_returns_nonempty_text() -> None:
     assert len(reply.strip()) > 0
 
 
+@requires_ollama
+def test_chat_completion_stream_reports_chunks_and_usage() -> None:
+    received: list[str] = []
+
+    async def on_chunk(text: str) -> None:
+        received.append(text)
+
+    result = asyncio.run(
+        ollama_client.chat_completion_stream(
+            "Conta da uno a cinque, una cifra per riga.",
+            model=config.OLLAMA_DEFAULT_MODEL,
+            on_chunk=on_chunk,
+        )
+    )
+    assert len(result.text.strip()) > 0
+    assert result.text == "".join(received)
+    assert result.usage.get("total_tokens", 0) > 0
+    assert result.elapsed_seconds > 0
+
+
 def test_unreachable_host_raises_clear_error() -> None:
     original_host = config.OLLAMA_HOST
     config.OLLAMA_HOST = "http://127.0.0.1:1"  # porta non in ascolto

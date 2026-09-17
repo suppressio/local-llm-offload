@@ -9,6 +9,7 @@ documentation of the variables below.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 
 def _get_float(name: str, default: float) -> float:
@@ -39,3 +40,15 @@ OLLAMA_TIMEOUT_SECONDS: float = _get_float("OLLAMA_TIMEOUT_SECONDS", 120.0)
 # blowing past the local model's context window with a single large file.
 MAX_CONTEXT_FILE_CHARS: int = _get_int("MAX_CONTEXT_FILE_CHARS", 20_000)
 MAX_TOTAL_CONTEXT_CHARS: int = _get_int("MAX_TOTAL_CONTEXT_CHARS", 60_000)
+
+# JSONL log of every delegate_to_local_llm call (model, tokens, elapsed time),
+# used by get_usage_stats to report real token/time savings. Path.home() is
+# used instead of an XDG-style path so the default works the same way on
+# Windows and Unix without extra dependencies.
+USAGE_LOG_PATH: Path = Path(
+    os.environ.get("USAGE_LOG_PATH", str(Path.home() / ".local-llm-offload" / "usage.jsonl"))
+).expanduser()
+
+# How many streamed chunks to batch before sending one MCP progress
+# notification, to avoid flooding the client with one message per token.
+PROGRESS_CHUNK_INTERVAL: int = _get_int("PROGRESS_CHUNK_INTERVAL", 20)

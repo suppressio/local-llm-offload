@@ -23,10 +23,18 @@ prima di automatizzare oltre.
 
 - **`delegate_to_local_llm(prompt, model?, context_files?)`** — invia un
   prompt al server Ollama (endpoint OpenAI-compatible
-  `/v1/chat/completions`) e ritorna la risposta testuale. `context_files`
-  accetta una lista di percorsi da leggere e allegare come contesto.
+  `/v1/chat/completions`, in streaming) e ritorna la risposta testuale
+  completa. `context_files` accetta una lista di percorsi da leggere e
+  allegare come contesto. Se il client MCP supporta le notifiche di
+  progresso, riceve aggiornamenti durante la generazione (utile con
+  modelli lenti come `qwen3-coder:30b`). Ogni chiamata viene registrata
+  nel log locale dei consumi (vedi `get_usage_stats`).
 - **`list_local_models()`** — elenca i modelli installati sul server
   Ollama (via `/api/tags` nativo).
+- **`get_usage_stats(since_hours?)`** — riepiloga, per modello, quante
+  chiamate sono state fatte e quanti token *reali* (riportati da Ollama,
+  non stimati) sono stati processati localmente — la misura concreta di
+  quanto lavoro è stato tolto al modello principale.
 
 ## Requisiti
 
@@ -54,6 +62,8 @@ ed è utile per test manuali in locale.
 | `OLLAMA_TIMEOUT_SECONDS`   | `120`                      | Timeout HTTP verso Ollama                                           |
 | `MAX_CONTEXT_FILE_CHARS`   | `20000`                    | Cap per singolo file passato in `context_files`                    |
 | `MAX_TOTAL_CONTEXT_CHARS`  | `60000`                    | Cap totale su tutti i `context_files` combinati                    |
+| `USAGE_LOG_PATH`           | `~/.local-llm-offload/usage.jsonl` | Log JSONL delle chiamate, letto da `get_usage_stats`        |
+| `PROGRESS_CHUNK_INTERVAL`  | `20`                       | Ogni quanti chunk streammati inviare una notifica di progresso      |
 
 ## Registrazione in un client MCP
 
@@ -172,11 +182,15 @@ agent mode, ecc.), richiama esplicitamente i tool, ad esempio:
 > refactor del modulo `bar.py` per estrarre la logica di validazione in
 > una funzione separata."
 
+> "Usa `get_usage_stats` per vedere quanti token abbiamo scaricato su
+> Ollama nelle ultime 24 ore."
+
 ## Test
 
-Uno smoke test esegue chiamate reali contro il server Ollama configurato
-in `OLLAMA_HOST` (nessun mock) e viene automaticamente saltato se il
-server non è raggiungibile:
+`tests/test_smoke.py` esegue chiamate reali contro il server Ollama
+configurato in `OLLAMA_HOST` (nessun mock) e viene automaticamente
+saltato se il server non è raggiungibile. `tests/test_usage_log.py`
+copre invece la logica di logging/aggregazione senza rete:
 
 ```bash
 export OLLAMA_HOST=http://192.168.1.50:11434  # o: set -a && source .env && set +a
@@ -185,6 +199,9 @@ uv run pytest
 
 ## Roadmap
 
-- [ ] Delegazione automatica (il client decide quando instradare a Ollama)
-- [ ] Streaming delle risposte
-- [ ] Metriche di risparmio token/tempo per confrontare modello principale vs LLM locale
+- [x] Streaming delle risposte (progress reporting durante la generazione)
+- [x] Metriche di risparmio token/tempo (`get_usage_stats`, token reali da Ollama)
+- [ ] Delegazione automatica (il client decide quando instradare a Ollama) —
+      volutamente non ancora affrontata: prima si vogliono guardare i numeri
+      reali di `get_usage_stats` su un uso normale, poi decidere se e come
+      automatizzare
