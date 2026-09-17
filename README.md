@@ -50,31 +50,61 @@ ed è utile per test manuali in locale.
 
 ## Registrazione come MCP server in Claude Code
 
-Dalla root del repo:
+### Linux / macOS
 
-**Linux / macOS**
+Dalla root del repo (dopo `uv sync`):
 
 ```bash
-claude mcp add local-llm-offload \
+claude mcp add local-llm-offload -s user \
   --env OLLAMA_HOST=http://192.168.1.50:11434 \
   --env OLLAMA_DEFAULT_MODEL=qwen2.5-coder:7b \
   -- uv run --directory /percorso/assoluto/local-llm-offload local-llm-offload
 ```
 
-**Windows (PowerShell)**
+### Windows
+
+Prerequisiti (una tantum):
+
+1. Installa `uv` (PowerShell):
+   ```powershell
+   irm https://astral.sh/uv/install.ps1 | iex
+   ```
+2. Clona il repo (privato — serve un account GitHub autorizzato, via `gh auth login` o una chiave SSH configurata):
+   ```powershell
+   git clone https://github.com/suppressio/local-llm-offload.git C:\Dev\local-llm-offload
+   cd C:\Dev\local-llm-offload
+   uv sync
+   ```
+3. Verifica che il server Ollama in LAN sia raggiungibile dalla macchina Windows (sostituisci con l'IP reale):
+   ```powershell
+   curl http://192.168.1.50:11434/api/tags
+   ```
+
+Poi registra il server in Claude Code:
 
 ```powershell
-claude mcp add local-llm-offload `
+claude mcp add local-llm-offload -s user `
   --env OLLAMA_HOST=http://192.168.1.50:11434 `
   --env OLLAMA_DEFAULT_MODEL=qwen2.5-coder:7b `
-  -- uv run --directory C:\percorso\assoluto\local-llm-offload local-llm-offload
+  -- uv run --directory C:\Dev\local-llm-offload local-llm-offload
 ```
 
-Verifica la registrazione con:
+`-s user` rende il server disponibile in tutte le sessioni Claude Code su
+quella macchina, non solo nel progetto corrente. `OLLAMA_HOST` deve puntare
+all'IP LAN reale del server Ollama (mai `localhost`, a meno che Ollama non
+giri sulla stessa macchina Windows).
+
+### Verifica
 
 ```bash
 claude mcp list
+claude mcp get local-llm-offload
 ```
+
+I tool MCP vengono caricati all'avvio di una sessione Claude Code: se la
+registrazione avviene mentre una sessione è già aperta, serve aprirne una
+nuova perché `delegate_to_local_llm` e `list_local_models` compaiano tra
+gli strumenti disponibili.
 
 ## Esempi d'uso
 
