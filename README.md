@@ -75,12 +75,16 @@ Serve prima di registrare il server in qualunque client:
    - Linux/macOS: `curl -LsSf https://astral.sh/uv/install.sh | sh`
    - Windows (PowerShell): `irm https://astral.sh/uv/install.ps1 | iex`
 2. Clona il repo (privato — serve un account GitHub autorizzato, via
-   `gh auth login` o una chiave SSH configurata sulla macchina):
+   `gh auth login` o una chiave SSH configurata sulla macchina) ed esegui
+   il setup:
    ```bash
    git clone https://github.com/suppressio/local-llm-offload.git
    cd local-llm-offload
-   uv sync
+   ./install.sh
    ```
+   `install.sh` esegue `uv sync` e stampa un comando `claude mcp add`
+   pronto all'uso con il percorso assoluto già risolto (basta sostituire
+   host e modello). Su Windows, o se preferisci farlo a mano: `uv sync`.
 3. Verifica che il server Ollama in LAN sia raggiungibile dalla macchina
    (sostituisci con l'IP reale):
    ```bash
