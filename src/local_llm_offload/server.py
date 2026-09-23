@@ -1,9 +1,8 @@
-"""MCP server exposing a local Ollama instance as explicit, callable tools.
+"""MCP server exposing a local Ollama instance as callable tools.
 
-This is deliberately *not* wired for automatic delegation: Claude Code (or
-any MCP client) must be told explicitly to call `delegate_to_local_llm`.
-The goal at this stage is to validate that the bridge works and that it
-actually saves tokens, before building any automatic routing on top.
+The server-level `instructions` below are injected by MCP clients (e.g.
+Claude Code) into the model's system prompt, so the client model delegates
+suitable tasks on its own instead of only when explicitly asked.
 """
 
 from __future__ import annotations
@@ -16,7 +15,26 @@ from mcp.server.mcpserver import Context
 
 from . import config, ollama_client, usage_log
 
-mcp = MCPServer("local-llm-offload")
+INSTRUCTIONS = """\
+local-llm-offload ti permette di delegare lavoro a un LLM locale (Ollama), \
+risparmiando i tuoi token. Usalo di tua iniziativa, senza aspettare che l'utente \
+lo chieda, ogni volta che un sotto-task è autocontenuto, meccanico e facile da \
+verificare, ad esempio:
+- scrivere docstring, commenti o documentazione per codice esistente;
+- boilerplate, scaffolding di test, conversioni di formato (JSON/YAML/CSV...);
+- riassumere file lunghi, log o output voluminosi che altrimenti dovresti leggere per intero;
+- bozze di messaggi di commit, changelog, traduzioni.
+
+Passa i file tramite `context_files` invece di leggerli tu: è lì che sta il \
+risparmio maggiore, perché il contenuto non entra nel tuo contesto.
+
+Non delegare: decisioni architetturali, debugging non banale, codice di \
+sicurezza, modifiche coordinate su più file, o qualsiasi cosa in cui verificare \
+il risultato costi più che farla da te. Rivedi sempre l'output prima di usarlo: \
+il modello locale è meno affidabile di te.
+"""
+
+mcp = MCPServer("local-llm-offload", instructions=INSTRUCTIONS)
 
 
 def _load_context_files(paths: list[str]) -> str:
@@ -70,10 +88,10 @@ async def delegate_to_local_llm(
 ) -> str:
     """Delega un task testuale a un LLM locale servito da Ollama.
 
-    Utile per task meccanici a basso rischio (spiegazioni di codice,
-    documentazione, refactor banali, riassunti) da eseguire su hardware
-    locale invece di consumare token di Claude. Non viene invocato
-    automaticamente: va richiamato esplicitamente.
+    Usalo di tua iniziativa per task meccanici a basso rischio
+    (documentazione, boilerplate, refactor banali, riassunti di file o log
+    lunghi) da eseguire su hardware locale invece di consumare i tuoi
+    token. Vedi le istruzioni del server per quando delegare e quando no.
 
     La risposta viene generata in streaming: se il client lo supporta,
     riceve notifiche di progresso durante la generazione (utile per

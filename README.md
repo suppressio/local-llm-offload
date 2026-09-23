@@ -171,8 +171,10 @@ available tools.
 
 ## Usage examples
 
-During a session with an MCP client (Claude Code, Copilot Chat in agent
-mode, etc.), call the tools explicitly, for example:
+The server sends MCP `instructions` describing when delegation is (and
+isn't) appropriate: clients that surface them to the model (e.g. Claude
+Code) delegate suitable tasks on their own. You can also ask explicitly,
+for example:
 
 > "Use `list_local_models` to see what's available on Ollama."
 
