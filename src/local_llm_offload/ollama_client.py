@@ -33,6 +33,27 @@ def _base_url() -> str:
     return config.OLLAMA_HOST
 
 
+def context_exceeded_message(body: str) -> str | None:
+    """A readable message if `body` is Ollama rejecting a prompt larger than the window, else None.
+
+    Depending on the model, Ollama either truncates an oversized prompt or
+    (with some engines, e.g. for granite4.2) rejects it with HTTP 400 and a
+    double-encoded body: {"error": "{\"error\": {\"type\": \"exceed_context_size_error\", ...}}"}.
+    """
+    if "exceed_context_size_error" not in body:
+        return None
+    try:
+        inner = json.loads(json.loads(body)["error"])["error"]
+        sizes = f"il prompt è di {int(inner['n_prompt_tokens'])} token, la finestra di {int(inner['n_ctx'])}"
+    except (ValueError, KeyError, TypeError):
+        sizes = "il prompt è più lungo della finestra"
+    return (
+        f"Il modello ha rifiutato la richiesta perché non sta nella finestra di contesto ({sizes}). "
+        f"Passa meno contesto, alza OLLAMA_NUM_CTX (ora {config.OLLAMA_NUM_CTX}) "
+        f"o usa un modello con contesto più ampio."
+    )
+
+
 @contextmanager
 def _translate_errors(operation: str) -> Iterator[None]:
     """Turns httpx exceptions into an `OllamaError` with an actionable message."""
@@ -49,6 +70,9 @@ def _translate_errors(operation: str) -> Iterator[None]:
             f"Modelli grandi (es. qwen3-coder:30b) possono richiedere OLLAMA_TIMEOUT_SECONDS più alto."
         ) from exc
     except httpx.HTTPStatusError as exc:
+        readable = context_exceeded_message(exc.response.text)
+        if readable:
+            raise OllamaError(readable) from exc
         raise OllamaError(
             f"Il server Ollama ha risposto con errore {exc.response.status_code} durante {operation}: "
             f"{exc.response.text[:500]}"

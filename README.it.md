@@ -73,8 +73,11 @@ ed è utile per test manuali in locale.
 
 ### Finestra di contesto e VRAM
 
-Ollama elabora solo i token che stanno nella finestra di contesto e
-**scarta il resto senza avvisare**. Il suo default lato server è piccolo
+Ollama elabora solo i token che stanno nella finestra di contesto. A
+seconda del modello, **scarta il resto senza avvisare** (questo server
+se ne accorge e antepone un avviso alla risposta) oppure rifiuta la
+richiesta (questo server restituisce un errore chiaro con le dimensioni
+in gioco). Il suo default lato server è piccolo
 (poche migliaia di token) a meno che il server non imposti
 `OLLAMA_CONTEXT_LENGTH`, quindi questo server chiede sempre la propria
 finestra con `OLLAMA_NUM_CTX`: funziona con qualsiasi server Ollama,

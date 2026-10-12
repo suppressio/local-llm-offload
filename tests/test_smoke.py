@@ -93,10 +93,15 @@ def test_long_prompt_fits_when_num_ctx_is_large(monkeypatch: pytest.MonkeyPatch)
 
 
 @requires_ollama
-def test_long_prompt_is_flagged_when_num_ctx_is_small(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_long_prompt_is_flagged_or_rejected_when_num_ctx_is_small(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Depending on the model, Ollama either truncates (flagged) or rejects with a clear error.
     monkeypatch.setattr(config, "OLLAMA_NUM_CTX", 4_096)
-    result = asyncio.run(ollama_client.chat_completion(_long_prompt(1_900), model=config.OLLAMA_DEFAULT_MODEL))
-    assert result.truncated
+    try:
+        result = asyncio.run(ollama_client.chat_completion(_long_prompt(1_900), model=config.OLLAMA_DEFAULT_MODEL))
+    except ollama_client.OllamaError as exc:
+        assert "finestra di contesto" in str(exc)
+    else:
+        assert result.truncated
 
 
 @requires_ollama
