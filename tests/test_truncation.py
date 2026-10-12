@@ -42,6 +42,29 @@ def test_repetitive_complete_prompt_is_not_flagged_when_window_is_known() -> Non
     assert not ollama_client.looks_truncated(prompt_chars=70_000, prompt_tokens=7_000, context_window=32_768)
 
 
+def test_context_exceeded_error_is_made_readable() -> None:
+    # Body returned by Ollama 0.34.3 for granite4.2:8b with num_ctx 4096.
+    body = (
+        '{"error":"{\\"error\\":{\\"code\\":400,\\"message\\":\\"request (9016 tokens) exceeds the available '
+        'context size (4096 tokens), try increasing it\\",\\"type\\":\\"exceed_context_size_error\\",'
+        '\\"n_prompt_tokens\\":9016,\\"n_ctx\\":4096}}"}'
+    )
+    message = ollama_client.context_exceeded_message(body)
+    assert message is not None
+    assert "9016" in message and "4096" in message
+    assert "OLLAMA_NUM_CTX" in message
+
+
+def test_unexpected_context_exceeded_shape_still_gets_a_message() -> None:
+    message = ollama_client.context_exceeded_message('{"error":"exceed_context_size_error"}')
+    assert message is not None
+    assert "finestra di contesto" in message
+
+
+def test_other_errors_are_not_treated_as_context_exceeded() -> None:
+    assert ollama_client.context_exceeded_message('{"error":"model not found"}') is None
+
+
 @pytest.fixture
 def small_caps(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "MAX_CONTEXT_FILE_CHARS", 100)

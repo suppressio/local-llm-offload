@@ -72,8 +72,10 @@ is handy for manual local testing.
 
 ### Context window and VRAM
 
-Ollama only processes as many tokens as the context window allows and
-**silently drops the rest**. Its server default is small (a few thousand
+Ollama only processes as many tokens as the context window allows.
+Depending on the model, it either **silently drops the rest** (this
+server detects it and prefixes the result with a warning) or rejects the
+request (this server returns a clear error with the sizes involved). Its server default is small (a few thousand
 tokens) unless the server sets `OLLAMA_CONTEXT_LENGTH`, so this server
 always requests its own window with `OLLAMA_NUM_CTX`: it works with any
 Ollama server, no server-side setting required.
