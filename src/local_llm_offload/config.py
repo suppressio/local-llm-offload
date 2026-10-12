@@ -44,6 +44,12 @@ OLLAMA_TIMEOUT_SECONDS: float = _get_float("OLLAMA_TIMEOUT_SECONDS", 120.0)
 # VRAM/RAM for the KV cache; Ollama also caps it at the model's own maximum.
 OLLAMA_NUM_CTX: int = _get_int("OLLAMA_NUM_CTX", 16_384)
 
+# Default reasoning level for models that support it ("thinking" capability
+# in Ollama): off, low, medium, high or on. Empty means the model's own
+# default, which for reasoning models is usually to think at length.
+# delegate_to_local_llm's `think` argument overrides it per call.
+OLLAMA_THINK: str = os.environ.get("OLLAMA_THINK", "").strip().lower()
+
 # Per-file and total character caps applied to `context_files`, to avoid
 # blowing past the local model's context window with a single large file.
 # The total defaults to ~2 chars per token of OLLAMA_NUM_CTX: at the usual
