@@ -19,10 +19,14 @@ seconda del client, ma il codice non cambia. Vedi
 ## Tool esposti
 
 - **`delegate_to_local_llm(prompt, model?, context_files?)`** — invia un
-  prompt al server Ollama (endpoint OpenAI-compatible
-  `/v1/chat/completions`, in streaming) e ritorna la risposta testuale
-  completa. `context_files` accetta una lista di percorsi da leggere e
-  allegare come contesto. Se il client MCP supporta le notifiche di
+  prompt al server Ollama (endpoint nativo `/api/chat`, in streaming,
+  con la finestra di contesto impostata da `OLLAMA_NUM_CTX`) e ritorna la
+  risposta testuale completa. `context_files` accetta una lista di
+  percorsi da leggere e allegare come contesto. Se il modello locale non
+  ha visto tutto l'input (file tagliati dai limiti di caratteri, o prompt
+  troncato da Ollama per stare nella finestra di contesto) la risposta
+  inizia con un avviso `ATTENZIONE`, invece di rispondere in silenzio su
+  un input parziale. Se il client MCP supporta le notifiche di
   progresso, riceve aggiornamenti durante la generazione (utile con
   modelli lenti come `qwen3-coder:30b`). Ogni chiamata viene registrata
   nel log locale dei consumi (vedi `get_usage_stats`).
@@ -57,10 +61,49 @@ ed è utile per test manuali in locale.
 | `OLLAMA_HOST`              | `http://localhost:11434`   | URL base del server Ollama (senza slash finale)                    |
 | `OLLAMA_DEFAULT_MODEL`     | `qwen2.5-coder:7b`         | Modello usato quando `delegate_to_local_llm` non specifica `model`  |
 | `OLLAMA_TIMEOUT_SECONDS`   | `120`                      | Timeout HTTP verso Ollama                                           |
-| `MAX_CONTEXT_FILE_CHARS`   | `20000`                    | Cap per singolo file passato in `context_files`                    |
-| `MAX_TOTAL_CONTEXT_CHARS`  | `60000`                    | Cap totale su tutti i `context_files` combinati                    |
+| `OLLAMA_NUM_CTX`           | `16384`                    | Finestra di contesto (token) richiesta a ogni chiamata — vedi sotto |
+| `MAX_TOTAL_CONTEXT_CHARS`  | `2 × OLLAMA_NUM_CTX`       | Cap totale su tutti i `context_files` combinati                    |
+| `MAX_CONTEXT_FILE_CHARS`   | `20000` (o il cap totale, se minore) | Cap per singolo file passato in `context_files`          |
 | `USAGE_LOG_PATH`           | `~/.local-llm-offload/usage.jsonl` | Log JSONL delle chiamate, letto da `get_usage_stats`        |
 | `PROGRESS_CHUNK_INTERVAL`  | `20`                       | Ogni quanti chunk streammati inviare una notifica di progresso      |
+
+### Finestra di contesto e VRAM
+
+Ollama elabora solo i token che stanno nella finestra di contesto e
+**scarta il resto senza avvisare**. Il suo default lato server è piccolo
+(poche migliaia di token) a meno che il server non imposti
+`OLLAMA_CONTEXT_LENGTH`, quindi questo server chiede sempre la propria
+finestra con `OLLAMA_NUM_CTX`: funziona con qualsiasi server Ollama,
+senza impostazioni lato server.
+
+Una finestra più grande permette di passare file e log più lunghi, ma la
+sua KV cache occupa memoria in aggiunta ai pesi del modello. Indicazioni
+di massima:
+
+| VRAM GPU | Peso modello | `OLLAMA_NUM_CTX` consigliato |
+|----------|--------------|------------------------------|
+| 8 GB     | ~5 GB (7-8B, q4) | `16384` (default)        |
+| 12-16 GB | ~5-9 GB      | `32768`                      |
+| 24 GB+   | qualsiasi    | `32768`-`65536`              |
+
+Se la finestra non sta in VRAM, Ollama usa la RAM di sistema ed è più
+lento; se non basta nemmeno la RAM, il caricamento del modello o la
+richiesta possono fallire. I modelli MoE che girano soprattutto in
+RAM (es. 30B con 3B attivi) reggono finestre grandi se la RAM basta.
+Ollama limita comunque la finestra al massimo del modello (es. 32768 per
+`qwen2.5-coder:7b`), qualunque valore si chieda.
+
+Tieni il valore fisso: Ollama ricarica il modello ogni volta che la
+finestra richiesta cambia, anche quando un altro client (es. l'estensione
+di un editor) usa lo stesso modello con una finestra diversa nello stesso
+momento: usa modelli diversi, o allinea la finestra a quella del client. I limiti di caratteri su `context_files`
+seguono `OLLAMA_NUM_CTX` per default (circa metà finestra), quindi
+alzarlo fa passare anche più contenuto dai file.
+
+Facoltativo: impostare `OLLAMA_CONTEXT_LENGTH` sul server Ollama alza il
+default per gli *altri* client (es. l'endpoint OpenAI-compatible usato da
+molti editor); non ha effetto su questo server, che invia sempre il
+proprio `num_ctx`.
 
 ## Registrazione in un client MCP
 

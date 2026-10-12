@@ -37,16 +37,21 @@ il modello locale è meno affidabile di te.
 mcp = MCPServer("local-llm-offload", instructions=INSTRUCTIONS)
 
 
-def _load_context_files(paths: list[str]) -> str:
+def _load_context_files(paths: list[str]) -> tuple[str, list[str]]:
     """Read and concatenate context files, applying size caps.
 
     Missing or unreadable files are reported inline instead of raising, so
     one bad path doesn't blow up an otherwise-fine request.
+
+    Returns the concatenated block plus the paths that were cut or skipped
+    by the caps: the markers inside the block only reach the local model,
+    so the caller needs this list to tell its own client.
     """
     blocks: list[str] = []
+    cut: list[str] = []
     total_chars = 0
 
-    for raw_path in paths:
+    for i, raw_path in enumerate(paths):
         path = Path(raw_path).expanduser()
         header = f"--- {raw_path} ---"
 
@@ -61,6 +66,7 @@ def _load_context_files(paths: list[str]) -> str:
             continue
 
         if len(text) > config.MAX_CONTEXT_FILE_CHARS:
+            cut.append(raw_path)
             text = (
                 text[: config.MAX_CONTEXT_FILE_CHARS]
                 + f"\n[...troncato, file più lungo di {config.MAX_CONTEXT_FILE_CHARS} caratteri...]"
@@ -71,12 +77,41 @@ def _load_context_files(paths: list[str]) -> str:
             text = text[:remaining] + "\n[...troncato, limite totale di contesto raggiunto...]"
             blocks.append(f"{header}\n{text}")
             total_chars += len(text)
+            if raw_path not in cut:
+                cut.append(raw_path)
+            cut.extend(paths[i + 1 :])
             break
 
         blocks.append(f"{header}\n{text}")
         total_chars += len(text)
 
-    return "\n\n".join(blocks)
+    return "\n\n".join(blocks), cut
+
+
+def _truncation_warnings(cut_files: list[str], result: ollama_client.ChatResult) -> str:
+    """Notes for the calling model when the local model didn't see the whole input."""
+    notes: list[str] = []
+    if cut_files:
+        notes.append(
+            f"questi file sono stati tagliati o esclusi dai limiti di caratteri "
+            f"(MAX_CONTEXT_FILE_CHARS={config.MAX_CONTEXT_FILE_CHARS}, "
+            f"MAX_TOTAL_CONTEXT_CHARS={config.MAX_TOTAL_CONTEXT_CHARS}): {', '.join(cut_files)}"
+        )
+    if result.truncated:
+        notes.append(
+            f"Ollama ha scartato parte del prompt: ha elaborato solo "
+            f"{result.usage.get('prompt_tokens', 0)} token, troppo pochi per la lunghezza inviata. "
+            f"Contesto usato: {result.context_window} token (OLLAMA_NUM_CTX={config.OLLAMA_NUM_CTX}, "
+            f"limitato al massimo del modello). Passa meno contesto, alza OLLAMA_NUM_CTX "
+            f"o usa un modello con contesto più ampio"
+        )
+    if not notes:
+        return ""
+    lines = "\n".join(f"- {n}." for n in notes)
+    return (
+        "[local-llm-offload] ATTENZIONE: il modello locale NON ha visto tutto l'input, "
+        f"la risposta qui sotto può essere incompleta o sbagliata.\n{lines}\n\n"
+    )
 
 
 @mcp.tool()
@@ -108,13 +143,16 @@ async def delegate_to_local_llm(
 
     Returns:
         Il testo generato dal modello locale, oppure un messaggio di errore
-        chiaro se il server Ollama non è raggiungibile.
+        chiaro se il server Ollama non è raggiungibile. Se il modello non ha
+        visto tutto l'input (file tagliati dai limiti, o prompt troncato da
+        Ollama), la risposta inizia con un avviso "ATTENZIONE".
     """
     chosen_model = model or config.OLLAMA_DEFAULT_MODEL
 
     full_prompt = prompt
+    cut_files: list[str] = []
     if context_files:
-        context_block = _load_context_files(context_files)
+        context_block, cut_files = _load_context_files(context_files)
         if context_block:
             full_prompt = f"{context_block}\n\n--- richiesta ---\n{prompt}"
 
@@ -147,7 +185,7 @@ async def delegate_to_local_llm(
         )
     )
 
-    return result.text
+    return _truncation_warnings(cut_files, result) + result.text
 
 
 @mcp.tool()
