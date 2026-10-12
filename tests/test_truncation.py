@@ -37,6 +37,11 @@ def test_prompt_far_from_half_window_is_not_flagged() -> None:
     assert not ollama_client.looks_truncated(prompt_chars=80_000, prompt_tokens=20_000, context_window=32_768)
 
 
+def test_repetitive_complete_prompt_is_not_flagged_when_window_is_known() -> None:
+    # Highly compressible text can exceed the fallback ratio while fitting fine.
+    assert not ollama_client.looks_truncated(prompt_chars=70_000, prompt_tokens=7_000, context_window=32_768)
+
+
 @pytest.fixture
 def small_caps(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "MAX_CONTEXT_FILE_CHARS", 100)

@@ -86,8 +86,9 @@ di massima:
 | 12-16 GB | ~5-9 GB      | `32768`                      |
 | 24 GB+   | qualsiasi    | `32768`-`65536`              |
 
-Se la finestra non sta in VRAM, Ollama usa la RAM di sistema: funziona
-lo stesso, solo più lentamente. I modelli MoE che girano soprattutto in
+Se la finestra non sta in VRAM, Ollama usa la RAM di sistema ed è più
+lento; se non basta nemmeno la RAM, il caricamento del modello o la
+richiesta possono fallire. I modelli MoE che girano soprattutto in
 RAM (es. 30B con 3B attivi) reggono finestre grandi se la RAM basta.
 Ollama limita comunque la finestra al massimo del modello (es. 32768 per
 `qwen2.5-coder:7b`), qualunque valore si chieda.

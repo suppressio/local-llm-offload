@@ -88,16 +88,16 @@ def looks_truncated(prompt_chars: int, prompt_tokens: int, context_window: int |
     """Whether Ollama most likely discarded part of a prompt of `prompt_chars` characters.
 
     `context_window` is the effective window (requested num_ctx capped at the
-    model's maximum); when known it enables the precise half-window check.
+    model's maximum). When known, only the precise half-window check is used;
+    the chars-per-token ratio is a fallback for when it isn't, since a
+    complete but highly repetitive prompt can exceed that ratio legitimately.
     """
     if prompt_chars < _TRUNCATION_MIN_CHARS or prompt_tokens <= 0:
         return False
-    if prompt_chars / prompt_tokens > _FALLBACK_CHARS_PER_TOKEN:
-        return True
     if context_window:
         half = context_window // 2
         return half <= prompt_tokens <= half + _TRUNCATED_HALF_WINDOW_SLACK
-    return False
+    return prompt_chars / prompt_tokens > _FALLBACK_CHARS_PER_TOKEN
 
 
 _model_max_context: dict[str, int | None] = {}
@@ -126,10 +126,10 @@ async def model_max_context(model: str) -> int | None:
     return _model_max_context[model]
 
 
-async def _context_window(model: str) -> int:
-    """Effective window for `model`: the requested num_ctx, capped at the model's maximum."""
+async def _context_window(model: str) -> int | None:
+    """Effective window for `model`: num_ctx capped at the model's maximum; None if that is unknown."""
     model_max = await model_max_context(model)
-    return min(config.OLLAMA_NUM_CTX, model_max) if model_max else config.OLLAMA_NUM_CTX
+    return min(config.OLLAMA_NUM_CTX, model_max) if model_max else None
 
 
 def _chat_payload(prompt: str, model: str, system_prompt: str | None, stream: bool) -> dict:
@@ -163,7 +163,8 @@ class ChatResult:
     elapsed_seconds: float = 0.0
     # True when Ollama most likely cut the prompt to fit the context window.
     truncated: bool = False
-    # Effective context window used (num_ctx capped at the model's maximum).
+    # Effective context window used (num_ctx capped at the model's maximum,
+    # or just num_ctx when the model's maximum couldn't be read).
     context_window: int = 0
 
 
@@ -176,7 +177,7 @@ async def _result(payload: dict, model: str, text: str, usage: dict[str, int], s
         usage=usage,
         elapsed_seconds=elapsed,
         truncated=looks_truncated(prompt_chars, usage.get("prompt_tokens", 0), window),
-        context_window=window,
+        context_window=window or config.OLLAMA_NUM_CTX,
     )
 
 

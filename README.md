@@ -83,8 +83,9 @@ takes memory on top of the model weights. Rough guide:
 | 12-16 GB | ~5-9 GB    | `32768`                    |
 | 24 GB+   | any        | `32768`-`65536`            |
 
-If the window doesn't fit in VRAM, Ollama spills to system RAM: it still
-works, only slower. MoE models running mostly from RAM (e.g. 30B with 3B
+If the window doesn't fit in VRAM, Ollama spills to system RAM and runs
+slower; if RAM isn't enough either, loading the model or the request can
+fail outright. MoE models running mostly from RAM (e.g. 30B with 3B
 active) can take large windows if RAM allows. Ollama also caps the window
 at the model's own maximum (e.g. 32768 for `qwen2.5-coder:7b`), whatever
 you request.
