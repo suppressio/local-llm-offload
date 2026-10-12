@@ -58,5 +58,19 @@ def test_per_call_level_wins_over_env_default(monkeypatch: pytest.MonkeyPatch) -
     assert _payload("thinker", "medium")["think"] == "medium"
 
 
+def test_explicitly_empty_call_value_overrides_env_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "OLLAMA_THINK", "off")
+    assert "think" not in _payload("thinker", "")
+
+
 def test_level_is_dropped_for_models_that_cannot_think() -> None:
     assert "think" not in _payload("plain", "low")
+
+
+def test_unknown_capabilities_only_send_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def unreadable(model: str) -> None:
+        return None
+
+    monkeypatch.setattr(ollama_client, "model_info", unreadable)
+    assert _payload("unknown", "off")["think"] is False
+    assert "think" not in _payload("unknown", "low")

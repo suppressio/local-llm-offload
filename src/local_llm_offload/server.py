@@ -148,8 +148,8 @@ async def delegate_to_local_llm(
             "low", "medium", "high" o "on". Usa "off" o "low" per task
             meccanici (riassunti, docstring, conversioni), che così sono
             molto più veloci; lascialo vuoto o "on" per codice non banale.
-            Se omesso usa OLLAMA_THINK; ignorato dai modelli che non
-            ragionano.
+            Se omesso usa OLLAMA_THINK; stringa vuota = default del
+            modello. Ignorato dai modelli che non ragionano.
 
     Returns:
         Il testo generato dal modello locale, oppure un messaggio di errore

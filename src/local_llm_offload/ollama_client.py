@@ -161,20 +161,23 @@ def parse_think(value: str | None) -> bool | str | None:
 
 
 async def _think_field(model: str, think: str | None) -> bool | str | None:
-    """The `think` value to send: the per-call level, else OLLAMA_THINK; None means don't send it.
+    """The `think` value to send; None means don't send it (model default).
+
+    Only an omitted per-call value (None) falls back to OLLAMA_THINK; an
+    explicitly empty one asks for the model default.
 
     Models without the thinking capability reject any level with HTTP 400,
     so the field is dropped for them: switching the default model must not
     turn a configured level into an error. If capabilities can't be read,
-    the level is sent as-is and Ollama's own error explains any problem.
+    only `false` is sent, since every model accepts it.
     """
-    level = parse_think(think if think is not None and think.strip() else config.OLLAMA_THINK)
+    level = parse_think(config.OLLAMA_THINK if think is None else think)
     if level is None:
         return None
     info = await model_info(model)
-    if info is not None and not info.can_think:
-        return None
-    return level
+    if info is None:
+        return level if level is False else None
+    return level if info.can_think else None
 
 
 async def _chat_payload(prompt: str, model: str, system_prompt: str | None, stream: bool, think: str | None) -> dict:
