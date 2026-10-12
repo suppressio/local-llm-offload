@@ -100,49 +100,98 @@ def looks_truncated(prompt_chars: int, prompt_tokens: int, context_window: int |
     return prompt_chars / prompt_tokens > _FALLBACK_CHARS_PER_TOKEN
 
 
-_model_max_context: dict[str, int | None] = {}
+@dataclass
+class ModelInfo:
+    # The model's own maximum context length; None if Ollama doesn't report it.
+    max_context: int | None = None
+    # Whether the model has Ollama's "thinking" capability (accepts reasoning levels).
+    can_think: bool = False
 
 
-async def model_max_context(model: str) -> int | None:
-    """The model's own maximum context length (/api/show), cached per process; None if unknown.
+_model_info: dict[str, ModelInfo] = {}
+
+
+async def model_info(model: str) -> ModelInfo | None:
+    """What /api/show reports about `model`, cached per process; None if it couldn't be read.
 
     Only answers from the server are cached: after a network error the next
-    call asks again instead of disabling the half-window check for good.
+    call asks again instead of disabling these checks for good.
     """
-    if model in _model_max_context:
-        return _model_max_context[model]
+    if model in _model_info:
+        return _model_info[model]
 
     try:
         async with httpx.AsyncClient(timeout=config.OLLAMA_TIMEOUT_SECONDS) as client:
             response = await client.post(f"{_base_url()}/api/show", json={"model": model})
             response.raise_for_status()
-        info = response.json().get("model_info") or {}
+        data = response.json()
     except (httpx.HTTPError, ValueError):
-        # Only feeds the truncation check: never fail the actual request over it.
+        # Only feeds optional checks: never fail the actual request over it.
         return None
 
-    lengths = [v for k, v in info.items() if k.endswith(".context_length") and isinstance(v, int)]
-    _model_max_context[model] = lengths[0] if lengths else None
-    return _model_max_context[model]
+    details = data.get("model_info") or {}
+    lengths = [v for k, v in details.items() if k.endswith(".context_length") and isinstance(v, int)]
+    _model_info[model] = ModelInfo(
+        max_context=lengths[0] if lengths else None,
+        can_think="thinking" in (data.get("capabilities") or []),
+    )
+    return _model_info[model]
 
 
 async def _context_window(model: str) -> int | None:
     """Effective window for `model`: num_ctx capped at the model's maximum; None if that is unknown."""
-    model_max = await model_max_context(model)
-    return min(config.OLLAMA_NUM_CTX, model_max) if model_max else None
+    info = await model_info(model)
+    if info and info.max_context:
+        return min(config.OLLAMA_NUM_CTX, info.max_context)
+    return None
 
 
-def _chat_payload(prompt: str, model: str, system_prompt: str | None, stream: bool) -> dict:
+# Accepted reasoning levels, mapped onto Ollama's `think` field.
+THINK_LEVELS: dict[str, bool | str] = {"off": False, "on": True, "low": "low", "medium": "medium", "high": "high"}
+
+
+def parse_think(value: str | None) -> bool | str | None:
+    """Map a reasoning level (case-insensitive) onto Ollama's `think`; None/empty means model default."""
+    if value is None or not value.strip():
+        return None
+    key = value.strip().lower()
+    if key not in THINK_LEVELS:
+        raise OllamaError(f"Valore di think non valido: '{value}'. Valori ammessi: {', '.join(THINK_LEVELS)}.")
+    return THINK_LEVELS[key]
+
+
+async def _think_field(model: str, think: str | None) -> bool | str | None:
+    """The `think` value to send: the per-call level, else OLLAMA_THINK; None means don't send it.
+
+    Models without the thinking capability reject any level with HTTP 400,
+    so the field is dropped for them: switching the default model must not
+    turn a configured level into an error. If capabilities can't be read,
+    the level is sent as-is and Ollama's own error explains any problem.
+    """
+    level = parse_think(think if think is not None and think.strip() else config.OLLAMA_THINK)
+    if level is None:
+        return None
+    info = await model_info(model)
+    if info is not None and not info.can_think:
+        return None
+    return level
+
+
+async def _chat_payload(prompt: str, model: str, system_prompt: str | None, stream: bool, think: str | None) -> dict:
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
-    return {
+    payload = {
         "model": model,
         "messages": messages,
         "stream": stream,
         "options": {"num_ctx": config.OLLAMA_NUM_CTX},
     }
+    think_field = await _think_field(model, think)
+    if think_field is not None:
+        payload["think"] = think_field
+    return payload
 
 
 def _usage_from(data: dict) -> dict[str, int]:
@@ -181,10 +230,12 @@ async def _result(payload: dict, model: str, text: str, usage: dict[str, int], s
     )
 
 
-async def chat_completion(prompt: str, model: str, system_prompt: str | None = None) -> ChatResult:
+async def chat_completion(
+    prompt: str, model: str, system_prompt: str | None = None, think: str | None = None
+) -> ChatResult:
     """Send a non-streaming chat request (native /api/chat). Used by tests/simple callers."""
     url = f"{_base_url()}/api/chat"
-    payload = _chat_payload(prompt, model, system_prompt, stream=False)
+    payload = await _chat_payload(prompt, model, system_prompt, stream=False, think=think)
 
     start = time.monotonic()
     with _translate_errors(f"la generazione con '{model}'"):
@@ -207,6 +258,7 @@ async def chat_completion_stream(
     model: str,
     on_chunk: Callable[[str], Awaitable[None]] | None = None,
     system_prompt: str | None = None,
+    think: str | None = None,
 ) -> ChatResult:
     """Stream a chat completion, calling `on_chunk` with each text delta as it arrives.
 
@@ -215,7 +267,7 @@ async def chat_completion_stream(
     counts needed for get_usage_stats and for the truncation check.
     """
     url = f"{_base_url()}/api/chat"
-    payload = _chat_payload(prompt, model, system_prompt, stream=True)
+    payload = await _chat_payload(prompt, model, system_prompt, stream=True, think=think)
 
     start = time.monotonic()
     text_parts: list[str] = []

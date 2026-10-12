@@ -18,14 +18,17 @@ depending on the client, but the code never changes. See
 
 ## Exposed tools
 
-- **`delegate_to_local_llm(prompt, model?, context_files?)`** — sends a
+- **`delegate_to_local_llm(prompt, model?, context_files?, think?)`** — sends a
   prompt to the Ollama server (native `/api/chat` endpoint, streamed,
   with the context window set by `OLLAMA_NUM_CTX`) and returns the full
   text response. `context_files` accepts a list of paths to read and
   attach as context. If the local model didn't see the whole input
   (files cut by the character caps, or a prompt Ollama truncated to fit
   the context window) the response starts with an `ATTENZIONE` warning
-  instead of silently answering from partial input. If the MCP client supports progress notifications, it
+  instead of silently answering from partial input. `think` sets how much
+  a reasoning model thinks before answering (`off`, `low`, `medium`,
+  `high`, `on`; default `OLLAMA_THINK`): `off`/`low` make mechanical tasks
+  much faster. It's ignored by models that can't reason. If the MCP client supports progress notifications, it
   receives updates while the response is being generated (useful with
   slower models like `qwen3-coder:30b`). Every call is recorded in the
   local usage log (see `get_usage_stats`).
@@ -61,6 +64,7 @@ is handy for manual local testing.
 | `OLLAMA_DEFAULT_MODEL`     | `qwen2.5-coder:7b`         | Model used when `delegate_to_local_llm` doesn't specify `model`     |
 | `OLLAMA_TIMEOUT_SECONDS`   | `120`                      | HTTP timeout towards Ollama                                         |
 | `OLLAMA_NUM_CTX`           | `16384`                    | Context window (tokens) requested on every call — see below         |
+| `OLLAMA_THINK`             | *(empty: model default)*   | Default reasoning level: `off`, `low`, `medium`, `high`, `on` — see below |
 | `MAX_TOTAL_CONTEXT_CHARS`  | `2 × OLLAMA_NUM_CTX`       | Total cap across all combined `context_files`                      |
 | `MAX_CONTEXT_FILE_CHARS`   | `20000` (or the total cap, if lower) | Cap per single file passed via `context_files`           |
 | `USAGE_LOG_PATH`           | `~/.local-llm-offload/usage.jsonl` | JSONL call log, read by `get_usage_stats`                   |
@@ -101,6 +105,25 @@ Optionally, setting `OLLAMA_CONTEXT_LENGTH` on the Ollama server raises
 the default for *other* clients (e.g. the OpenAI-compatible endpoint used
 by many editors); it has no effect on this server, which always sends its
 own `num_ctx`.
+
+### Reasoning level
+
+Reasoning models (Ollama's `thinking` capability, e.g. `granite4.2`,
+`qwen3.6`) think at length by default, which can take minutes on a local
+GPU. For the mechanical tasks this server is meant for, less is usually
+enough. Measured with `granite4.2:8b` on a short coding task:
+
+| `think`  | Time | Thinking |
+|----------|------|----------|
+| `off`    | 1 s  | none     |
+| `low`    | 2 s  | a few words |
+| `on`     | 13 s | a paragraph |
+| `medium` | 36 s | ~3000 chars |
+
+`OLLAMA_THINK` sets the default and the `think` argument overrides it per
+call. The calling model is told to use `off`/`low` for mechanical tasks.
+Models without the `thinking` capability never receive the field, so
+setting a level and later switching to a non-reasoning model is safe.
 
 ## Registering with an MCP client
 

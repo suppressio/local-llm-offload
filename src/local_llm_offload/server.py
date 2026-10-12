@@ -28,6 +28,9 @@ verificare, ad esempio:
 Passa i file tramite `context_files` invece di leggerli tu: è lì che sta il \
 risparmio maggiore, perché il contenuto non entra nel tuo contesto.
 
+Per i task meccanici passa `think="off"` o `think="low"`: i modelli che \
+ragionano rispondono molto prima e il risultato non peggiora.
+
 Non delegare: decisioni architetturali, debugging non banale, codice di \
 sicurezza, modifiche coordinate su più file, o qualsiasi cosa in cui verificare \
 il risultato costi più che farla da te. Rivedi sempre l'output prima di usarlo: \
@@ -119,6 +122,7 @@ async def delegate_to_local_llm(
     prompt: str,
     model: str | None = None,
     context_files: list[str] | None = None,
+    think: str | None = None,
     ctx: Context | None = None,
 ) -> str:
     """Delega un task testuale a un LLM locale servito da Ollama.
@@ -140,6 +144,12 @@ async def delegate_to_local_llm(
             usa OLLAMA_DEFAULT_MODEL.
         context_files: Percorsi di file da includere come contesto, letti e
             allegati al prompt (con troncamento se troppo grandi).
+        think: Quanto far ragionare il modello prima di rispondere: "off",
+            "low", "medium", "high" o "on". Usa "off" o "low" per task
+            meccanici (riassunti, docstring, conversioni), che così sono
+            molto più veloci; lascialo vuoto o "on" per codice non banale.
+            Se omesso usa OLLAMA_THINK; ignorato dai modelli che non
+            ragionano.
 
     Returns:
         Il testo generato dal modello locale, oppure un messaggio di errore
@@ -168,7 +178,9 @@ async def delegate_to_local_llm(
             await ctx.report_progress(total_chars, message=f"{chosen_model}: {total_chars} caratteri generati")
 
     try:
-        result = await ollama_client.chat_completion_stream(full_prompt, model=chosen_model, on_chunk=on_chunk)
+        result = await ollama_client.chat_completion_stream(
+            full_prompt, model=chosen_model, on_chunk=on_chunk, think=think
+        )
     except ollama_client.OllamaError as exc:
         usage_log.record(usage_log.UsageEntry(timestamp=time.time(), model=chosen_model, ok=False, elapsed_seconds=0.0))
         return f"[local-llm-offload] Errore: {exc}"

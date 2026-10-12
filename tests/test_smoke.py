@@ -99,6 +99,37 @@ def test_long_prompt_is_flagged_when_num_ctx_is_small(monkeypatch: pytest.Monkey
     assert result.truncated
 
 
+@requires_ollama
+def test_think_level_is_ignored_by_model_without_thinking() -> None:
+    info = asyncio.run(ollama_client.model_info(config.OLLAMA_DEFAULT_MODEL))
+    if info is None or info.can_think:
+        pytest.skip(f"{config.OLLAMA_DEFAULT_MODEL} supporta il ragionamento: test non applicabile")
+    # Sent as-is, Ollama would answer HTTP 400 "does not support thinking".
+    result = asyncio.run(
+        ollama_client.chat_completion("Rispondi con una sola parola: ciao", model=config.OLLAMA_DEFAULT_MODEL, think="low")
+    )
+    assert len(result.text.strip()) > 0
+
+
+def _thinking_model() -> str | None:
+    # Smallest first: loading a big model just for this check would be slow.
+    models = sorted(asyncio.run(ollama_client.list_models()), key=lambda m: m.get("size", 0))
+    for entry in models:
+        info = asyncio.run(ollama_client.model_info(entry["name"]))
+        if info and info.can_think:
+            return entry["name"]
+    return None
+
+
+@requires_ollama
+def test_think_off_is_accepted_by_thinking_model() -> None:
+    model = _thinking_model()
+    if model is None:
+        pytest.skip("Nessun modello con capacità di ragionamento installato")
+    result = asyncio.run(ollama_client.chat_completion("Rispondi con una sola parola: ciao", model=model, think="off"))
+    assert len(result.text.strip()) > 0
+
+
 def test_unreachable_host_raises_clear_error() -> None:
     original_host = config.OLLAMA_HOST
     config.OLLAMA_HOST = "http://127.0.0.1:1"  # porta non in ascolto
