@@ -19,10 +19,13 @@ depending on the client, but the code never changes. See
 ## Exposed tools
 
 - **`delegate_to_local_llm(prompt, model?, context_files?)`** — sends a
-  prompt to the Ollama server (OpenAI-compatible
-  `/v1/chat/completions` endpoint, streamed) and returns the full text
-  response. `context_files` accepts a list of paths to read and attach
-  as context. If the MCP client supports progress notifications, it
+  prompt to the Ollama server (native `/api/chat` endpoint, streamed,
+  with the context window set by `OLLAMA_NUM_CTX`) and returns the full
+  text response. `context_files` accepts a list of paths to read and
+  attach as context. If the local model didn't see the whole input
+  (files cut by the character caps, or a prompt Ollama truncated to fit
+  the context window) the response starts with an `ATTENZIONE` warning
+  instead of silently answering from partial input. If the MCP client supports progress notifications, it
   receives updates while the response is being generated (useful with
   slower models like `qwen3-coder:30b`). Every call is recorded in the
   local usage log (see `get_usage_stats`).
@@ -57,10 +60,46 @@ is handy for manual local testing.
 | `OLLAMA_HOST`              | `http://localhost:11434`   | Base URL of the Ollama server (no trailing slash)                  |
 | `OLLAMA_DEFAULT_MODEL`     | `qwen2.5-coder:7b`         | Model used when `delegate_to_local_llm` doesn't specify `model`     |
 | `OLLAMA_TIMEOUT_SECONDS`   | `120`                      | HTTP timeout towards Ollama                                         |
-| `MAX_CONTEXT_FILE_CHARS`   | `20000`                    | Cap per single file passed via `context_files`                     |
-| `MAX_TOTAL_CONTEXT_CHARS`  | `60000`                    | Total cap across all combined `context_files`                      |
+| `OLLAMA_NUM_CTX`           | `16384`                    | Context window (tokens) requested on every call — see below         |
+| `MAX_TOTAL_CONTEXT_CHARS`  | `2 × OLLAMA_NUM_CTX`       | Total cap across all combined `context_files`                      |
+| `MAX_CONTEXT_FILE_CHARS`   | `20000` (or the total cap, if lower) | Cap per single file passed via `context_files`           |
 | `USAGE_LOG_PATH`           | `~/.local-llm-offload/usage.jsonl` | JSONL call log, read by `get_usage_stats`                   |
 | `PROGRESS_CHUNK_INTERVAL`  | `20`                       | How many streamed chunks between MCP progress notifications         |
+
+### Context window and VRAM
+
+Ollama only processes as many tokens as the context window allows and
+**silently drops the rest**. Its server default is small (a few thousand
+tokens) unless the server sets `OLLAMA_CONTEXT_LENGTH`, so this server
+always requests its own window with `OLLAMA_NUM_CTX`: it works with any
+Ollama server, no server-side setting required.
+
+A larger window lets you pass longer files and logs, but its KV cache
+takes memory on top of the model weights. Rough guide:
+
+| GPU VRAM | Model size | Suggested `OLLAMA_NUM_CTX` |
+|----------|------------|----------------------------|
+| 8 GB     | ~5 GB (7-8B, q4) | `16384` (default)    |
+| 12-16 GB | ~5-9 GB    | `32768`                    |
+| 24 GB+   | any        | `32768`-`65536`            |
+
+If the window doesn't fit in VRAM, Ollama spills to system RAM: it still
+works, only slower. MoE models running mostly from RAM (e.g. 30B with 3B
+active) can take large windows if RAM allows. Ollama also caps the window
+at the model's own maximum (e.g. 32768 for `qwen2.5-coder:7b`), whatever
+you request.
+
+Keep the value fixed: Ollama reloads the model whenever the requested
+window changes, including when another client (e.g. an editor extension)
+uses the same model with a different window at the same time — use
+different models, or match that client's window. The character caps on `context_files` follow
+`OLLAMA_NUM_CTX` by default (about half the window), so raising it also
+lets more file content through.
+
+Optionally, setting `OLLAMA_CONTEXT_LENGTH` on the Ollama server raises
+the default for *other* clients (e.g. the OpenAI-compatible endpoint used
+by many editors); it has no effect on this server, which always sends its
+own `num_ctx`.
 
 ## Registering with an MCP client
 
