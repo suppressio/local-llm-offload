@@ -65,7 +65,7 @@ ed è utile per test manuali in locale.
 | `OLLAMA_DEFAULT_MODEL`     | `qwen3.6:35b-a3b-coding-32k`         | Modello usato quando `delegate_to_local_llm` non specifica `model`  |
 | `OLLAMA_TIMEOUT_SECONDS`   | `120`                      | Timeout HTTP verso Ollama                                           |
 | `OLLAMA_NUM_CTX`           | `16384`                    | Finestra di contesto (token) richiesta a ogni chiamata — vedi sotto |
-| `OLLAMA_THINK`             | *(vuoto: default del modello)* | Livello di ragionamento di default: `off`, `low`, `medium`, `high`, `on` — vedi sotto |
+| `OLLAMA_THINK`             | `off`                      | Livello di ragionamento di default: `off`, `low`, `medium`, `high`, `on` — vedi sotto |
 | `MAX_TOTAL_CONTEXT_CHARS`  | `2 × OLLAMA_NUM_CTX`       | Cap totale su tutti i `context_files` combinati                    |
 | `MAX_CONTEXT_FILE_CHARS`   | `20000` (o il cap totale, se minore) | Cap per singolo file passato in `context_files`          |
 | `USAGE_LOG_PATH`           | `~/.local-llm-offload/usage.jsonl` | Log JSONL delle chiamate, letto da `get_usage_stats`        |
@@ -128,7 +128,9 @@ task di codice:
 | `medium` | 36 s  | ~3000 caratteri |
 
 `OLLAMA_THINK` imposta il default e l'argomento `think` lo sovrascrive
-per singola chiamata. Al modello chiamante viene indicato di usare
+per singola chiamata. Se non è impostato vale `off`, perché alcuni modelli
+locali (es. `qwen3.6`) possono ragionare in loop; con una stringa vuota si
+usa il default del modello. Al modello chiamante viene indicato di usare
 `off`/`low` per i task meccanici. I modelli senza la capacità `thinking`
 non ricevono mai il campo, quindi impostare un livello e poi passare a un
 modello che non ragiona non dà errori.

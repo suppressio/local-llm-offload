@@ -64,7 +64,7 @@ is handy for manual local testing.
 | `OLLAMA_DEFAULT_MODEL`     | `qwen3.6:35b-a3b-coding-32k`         | Model used when `delegate_to_local_llm` doesn't specify `model`     |
 | `OLLAMA_TIMEOUT_SECONDS`   | `120`                      | HTTP timeout towards Ollama                                         |
 | `OLLAMA_NUM_CTX`           | `16384`                    | Context window (tokens) requested on every call — see below         |
-| `OLLAMA_THINK`             | *(empty: model default)*   | Default reasoning level: `off`, `low`, `medium`, `high`, `on` — see below |
+| `OLLAMA_THINK`             | `off`                      | Default reasoning level: `off`, `low`, `medium`, `high`, `on` — see below |
 | `MAX_TOTAL_CONTEXT_CHARS`  | `2 × OLLAMA_NUM_CTX`       | Total cap across all combined `context_files`                      |
 | `MAX_CONTEXT_FILE_CHARS`   | `20000` (or the total cap, if lower) | Cap per single file passed via `context_files`           |
 | `USAGE_LOG_PATH`           | `~/.local-llm-offload/usage.jsonl` | JSONL call log, read by `get_usage_stats`                   |
@@ -122,7 +122,8 @@ enough. Measured with `granite4.2:8b` on a short coding task:
 | `medium` | 36 s | ~3000 chars |
 
 `OLLAMA_THINK` sets the default and the `think` argument overrides it per
-call. The calling model is told to use `off`/`low` for mechanical tasks.
+call. It defaults to `off`, because some local models (e.g. `qwen3.6`) can
+think in a loop; set it to an empty string to get the model's own default. The calling model is told to use `off`/`low` for mechanical tasks.
 Models without the `thinking` capability never receive the field, so
 setting a level and later switching to a non-reasoning model is safe.
 
