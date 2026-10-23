@@ -31,7 +31,7 @@ seconda del client, ma il codice non cambia. Vedi
   `OLLAMA_THINK`): con `off`/`low` i task meccanici sono molto più veloci.
   Viene ignorato dai modelli che non ragionano. Se il client MCP supporta le notifiche di
   progresso, riceve aggiornamenti durante la generazione (utile con
-  modelli lenti come `qwen3-coder:30b`). Ogni chiamata viene registrata
+  modelli grandi e lenti). Ogni chiamata viene registrata
   nel log locale dei consumi (vedi `get_usage_stats`).
 - **`list_local_models()`** — elenca i modelli installati sul server
   Ollama (via `/api/tags` nativo).
@@ -62,7 +62,7 @@ ed è utile per test manuali in locale.
 | Variabile                 | Default                    | Descrizione                                                       |
 |----------------------------|----------------------------|--------------------------------------------------------------------|
 | `OLLAMA_HOST`              | `http://localhost:11434`   | URL base del server Ollama (senza slash finale)                    |
-| `OLLAMA_DEFAULT_MODEL`     | `qwen2.5-coder:7b`         | Modello usato quando `delegate_to_local_llm` non specifica `model`  |
+| `OLLAMA_DEFAULT_MODEL`     | `qwen3.6:35b-a3b-coding-32k`         | Modello usato quando `delegate_to_local_llm` non specifica `model`  |
 | `OLLAMA_TIMEOUT_SECONDS`   | `120`                      | Timeout HTTP verso Ollama                                           |
 | `OLLAMA_NUM_CTX`           | `16384`                    | Finestra di contesto (token) richiesta a ogni chiamata — vedi sotto |
 | `OLLAMA_THINK`             | *(vuoto: default del modello)* | Livello di ragionamento di default: `off`, `low`, `medium`, `high`, `on` — vedi sotto |
@@ -97,8 +97,8 @@ Se la finestra non sta in VRAM, Ollama usa la RAM di sistema ed è più
 lento; se non basta nemmeno la RAM, il caricamento del modello o la
 richiesta possono fallire. I modelli MoE che girano soprattutto in
 RAM (es. 30B con 3B attivi) reggono finestre grandi se la RAM basta.
-Ollama limita comunque la finestra al massimo del modello (es. 32768 per
-`qwen2.5-coder:7b`), qualunque valore si chieda.
+Ollama limita comunque la finestra al massimo del modello, qualunque
+valore si chieda.
 
 Tieni il valore fisso: Ollama ricarica il modello ogni volta che la
 finestra richiesta cambia, anche quando un altro client (es. l'estensione
@@ -164,7 +164,7 @@ Serve prima di registrare il server in qualunque client:
 ```bash
 claude mcp add local-llm-offload -s user \
   --env OLLAMA_HOST=http://192.168.1.50:11434 \
-  --env OLLAMA_DEFAULT_MODEL=qwen2.5-coder:7b \
+  --env OLLAMA_DEFAULT_MODEL=qwen3.6:35b-a3b-coding-32k \
   -- uv run --directory /percorso/assoluto/local-llm-offload local-llm-offload
 ```
 
@@ -196,7 +196,7 @@ Configuration"):
       "args": ["run", "--directory", "/percorso/assoluto/local-llm-offload", "local-llm-offload"],
       "env": {
         "OLLAMA_HOST": "http://192.168.1.50:11434",
-        "OLLAMA_DEFAULT_MODEL": "qwen2.5-coder:7b"
+        "OLLAMA_DEFAULT_MODEL": "qwen3.6:35b-a3b-coding-32k"
       }
     }
   }
@@ -217,7 +217,7 @@ In `~/.copilot/mcp-config.json` (nota: qui la chiave radice è
       "args": ["run", "--directory", "/percorso/assoluto/local-llm-offload", "local-llm-offload"],
       "env": {
         "OLLAMA_HOST": "http://192.168.1.50:11434",
-        "OLLAMA_DEFAULT_MODEL": "qwen2.5-coder:7b"
+        "OLLAMA_DEFAULT_MODEL": "qwen3.6:35b-a3b-coding-32k"
       }
     }
   }
@@ -249,10 +249,10 @@ esplicitamente, ad esempio:
 
 > "Usa `list_local_models` per vedere cosa c'è disponibile su Ollama."
 
-> "Usa `delegate_to_local_llm` con model `qwen2.5-coder:7b` per scrivere
+> "Usa `delegate_to_local_llm` per scrivere
 > le docstring di `src/foo.py`, passandolo come `context_files`."
 
-> "Delega a `delegate_to_local_llm` con model `qwen3-coder:30b` un
+> "Delega a `delegate_to_local_llm` un
 > refactor del modulo `bar.py` per estrarre la logica di validazione in
 > una funzione separata."
 

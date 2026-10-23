@@ -67,7 +67,7 @@ def _translate_errors(operation: str) -> Iterator[None]:
     except httpx.TimeoutException as exc:
         raise OllamaError(
             f"Timeout ({config.OLLAMA_TIMEOUT_SECONDS}s) su {config.OLLAMA_HOST} durante {operation}. "
-            f"Modelli grandi (es. qwen3-coder:30b) possono richiedere OLLAMA_TIMEOUT_SECONDS più alto."
+            f"Modelli grandi possono richiedere OLLAMA_TIMEOUT_SECONDS più alto."
         ) from exc
     except httpx.HTTPStatusError as exc:
         readable = context_exceeded_message(exc.response.text)

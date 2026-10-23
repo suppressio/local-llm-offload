@@ -147,7 +147,9 @@ async def delegate_to_local_llm(
         think: Quanto far ragionare il modello prima di rispondere: "off",
             "low", "medium", "high" o "on". Usa "off" o "low" per task
             meccanici (riassunti, docstring, conversioni), che così sono
-            molto più veloci; lascialo vuoto o "on" per codice non banale.
+            molto più veloci. Normalmente lascialo non impostato: il default
+            OLLAMA_THINK è scelto appositamente. Abilitare il ragionamento può
+            far pensare alcuni modelli locali per minuti o mandarli in loop.
             Se omesso usa OLLAMA_THINK; stringa vuota = default del
             modello. Ignorato dai modelli che non ragionano.
 
