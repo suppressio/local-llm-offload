@@ -33,7 +33,7 @@ def _get_int(name: str, default: int) -> int:
 
 
 OLLAMA_HOST: str = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-OLLAMA_DEFAULT_MODEL: str = os.environ.get("OLLAMA_DEFAULT_MODEL", "qwen2.5-coder:7b")
+OLLAMA_DEFAULT_MODEL: str = os.environ.get("OLLAMA_DEFAULT_MODEL", "qwen3.6:35b-a3b-coding-32k")
 OLLAMA_TIMEOUT_SECONDS: float = _get_float("OLLAMA_TIMEOUT_SECONDS", 120.0)
 
 # Context window (tokens) requested from Ollama on every call via
@@ -45,10 +45,11 @@ OLLAMA_TIMEOUT_SECONDS: float = _get_float("OLLAMA_TIMEOUT_SECONDS", 120.0)
 OLLAMA_NUM_CTX: int = _get_int("OLLAMA_NUM_CTX", 16_384)
 
 # Default reasoning level for models that support it ("thinking" capability
-# in Ollama): off, low, medium, high or on. Empty means the model's own
-# default, which for reasoning models is usually to think at length.
-# delegate_to_local_llm's `think` argument overrides it per call.
-OLLAMA_THINK: str = os.environ.get("OLLAMA_THINK", "").strip().lower()
+# in Ollama): off, low, medium, high or on. Unset means off: some local
+# reasoning models think for minutes or loop. Set it to an empty string for
+# the model's own default, which for reasoning models is usually to think at
+# length. delegate_to_local_llm's `think` argument overrides it per call.
+OLLAMA_THINK: str = os.environ.get("OLLAMA_THINK", "off").strip().lower()
 
 # Per-file and total character caps applied to `context_files`, to avoid
 # blowing past the local model's context window with a single large file.

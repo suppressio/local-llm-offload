@@ -30,7 +30,7 @@ depending on the client, but the code never changes. See
   `high`, `on`; default `OLLAMA_THINK`): `off`/`low` make mechanical tasks
   much faster. It's ignored by models that can't reason. If the MCP client supports progress notifications, it
   receives updates while the response is being generated (useful with
-  slower models like `qwen3-coder:30b`). Every call is recorded in the
+  large, slow models). Every call is recorded in the
   local usage log (see `get_usage_stats`).
 - **`list_local_models()`** — lists the models installed on the Ollama
   server (via the native `/api/tags` endpoint).
@@ -61,10 +61,10 @@ is handy for manual local testing.
 | Variable                  | Default                    | Description                                                       |
 |----------------------------|----------------------------|--------------------------------------------------------------------|
 | `OLLAMA_HOST`              | `http://localhost:11434`   | Base URL of the Ollama server (no trailing slash)                  |
-| `OLLAMA_DEFAULT_MODEL`     | `qwen2.5-coder:7b`         | Model used when `delegate_to_local_llm` doesn't specify `model`     |
+| `OLLAMA_DEFAULT_MODEL`     | `qwen3.6:35b-a3b-coding-32k`         | Model used when `delegate_to_local_llm` doesn't specify `model`     |
 | `OLLAMA_TIMEOUT_SECONDS`   | `120`                      | HTTP timeout towards Ollama                                         |
 | `OLLAMA_NUM_CTX`           | `16384`                    | Context window (tokens) requested on every call — see below         |
-| `OLLAMA_THINK`             | *(empty: model default)*   | Default reasoning level: `off`, `low`, `medium`, `high`, `on` — see below |
+| `OLLAMA_THINK`             | `off`                      | Default reasoning level: `off`, `low`, `medium`, `high`, `on` — see below |
 | `MAX_TOTAL_CONTEXT_CHARS`  | `2 × OLLAMA_NUM_CTX`       | Total cap across all combined `context_files`                      |
 | `MAX_CONTEXT_FILE_CHARS`   | `20000` (or the total cap, if lower) | Cap per single file passed via `context_files`           |
 | `USAGE_LOG_PATH`           | `~/.local-llm-offload/usage.jsonl` | JSONL call log, read by `get_usage_stats`                   |
@@ -93,8 +93,7 @@ If the window doesn't fit in VRAM, Ollama spills to system RAM and runs
 slower; if RAM isn't enough either, loading the model or the request can
 fail outright. MoE models running mostly from RAM (e.g. 30B with 3B
 active) can take large windows if RAM allows. Ollama also caps the window
-at the model's own maximum (e.g. 32768 for `qwen2.5-coder:7b`), whatever
-you request.
+at the model's own maximum, whatever you request.
 
 Keep the value fixed: Ollama reloads the model whenever the requested
 window changes, including when another client (e.g. an editor extension)
@@ -123,7 +122,8 @@ enough. Measured with `granite4.2:8b` on a short coding task:
 | `medium` | 36 s | ~3000 chars |
 
 `OLLAMA_THINK` sets the default and the `think` argument overrides it per
-call. The calling model is told to use `off`/`low` for mechanical tasks.
+call. It defaults to `off`, because some local models (e.g. `qwen3.6`) can
+think in a loop; set it to an empty string to get the model's own default. The calling model is told to use `off`/`low` for mechanical tasks.
 Models without the `thinking` capability never receive the field, so
 setting a level and later switching to a non-reasoning model is safe.
 
@@ -158,7 +158,7 @@ Needed before registering the server with any client:
 ```bash
 claude mcp add local-llm-offload -s user \
   --env OLLAMA_HOST=http://192.168.1.50:11434 \
-  --env OLLAMA_DEFAULT_MODEL=qwen2.5-coder:7b \
+  --env OLLAMA_DEFAULT_MODEL=qwen3.6:35b-a3b-coding-32k \
   -- uv run --directory /absolute/path/local-llm-offload local-llm-offload
 ```
 
@@ -190,7 +190,7 @@ Configuration"):
       "args": ["run", "--directory", "/absolute/path/local-llm-offload", "local-llm-offload"],
       "env": {
         "OLLAMA_HOST": "http://192.168.1.50:11434",
-        "OLLAMA_DEFAULT_MODEL": "qwen2.5-coder:7b"
+        "OLLAMA_DEFAULT_MODEL": "qwen3.6:35b-a3b-coding-32k"
       }
     }
   }
@@ -211,7 +211,7 @@ In `~/.copilot/mcp-config.json` (note: the root key here is
       "args": ["run", "--directory", "/absolute/path/local-llm-offload", "local-llm-offload"],
       "env": {
         "OLLAMA_HOST": "http://192.168.1.50:11434",
-        "OLLAMA_DEFAULT_MODEL": "qwen2.5-coder:7b"
+        "OLLAMA_DEFAULT_MODEL": "qwen3.6:35b-a3b-coding-32k"
       }
     }
   }
@@ -243,10 +243,10 @@ for example:
 
 > "Use `list_local_models` to see what's available on Ollama."
 
-> "Use `delegate_to_local_llm` with model `qwen2.5-coder:7b` to write
+> "Use `delegate_to_local_llm` to write
 > docstrings for `src/foo.py`, passing it as `context_files`."
 
-> "Delegate to `delegate_to_local_llm` with model `qwen3-coder:30b` a
+> "Delegate to `delegate_to_local_llm` a
 > refactor of the `bar.py` module to extract the validation logic into a
 > separate function."
 

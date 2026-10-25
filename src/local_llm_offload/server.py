@@ -134,20 +134,22 @@ async def delegate_to_local_llm(
 
     La risposta viene generata in streaming: se il client lo supporta,
     riceve notifiche di progresso durante la generazione (utile per
-    modelli lenti come qwen3-coder:30b), ma il valore ritornato è sempre
-    il testo completo.
+    modelli grandi e lenti), ma il valore ritornato è sempre il testo
+    completo.
 
     Args:
         prompt: L'istruzione/domanda da inviare al modello locale.
-        model: Nome del modello Ollama da usare (es. "qwen2.5-coder:7b" per
-            task rapidi, "qwen3-coder:30b" per task più corposi). Se omesso,
-            usa OLLAMA_DEFAULT_MODEL.
+        model: Nome del modello Ollama da usare, tra quelli installati
+            (vedi `list_local_models`). Se omesso, usa OLLAMA_DEFAULT_MODEL:
+            lascialo vuoto salvo motivi precisi.
         context_files: Percorsi di file da includere come contesto, letti e
             allegati al prompt (con troncamento se troppo grandi).
         think: Quanto far ragionare il modello prima di rispondere: "off",
             "low", "medium", "high" o "on". Usa "off" o "low" per task
             meccanici (riassunti, docstring, conversioni), che così sono
-            molto più veloci; lascialo vuoto o "on" per codice non banale.
+            molto più veloci. Normalmente lascialo non impostato: il default
+            OLLAMA_THINK è scelto appositamente. Abilitare il ragionamento può
+            far pensare alcuni modelli locali per minuti o mandarli in loop.
             Se omesso usa OLLAMA_THINK; stringa vuota = default del
             modello. Ignorato dai modelli che non ragionano.
 

@@ -83,12 +83,12 @@ def _long_prompt(lines: int) -> str:
 
 @requires_ollama
 def test_long_prompt_fits_when_num_ctx_is_large(monkeypatch: pytest.MonkeyPatch) -> None:
-    # ~30k tokens against a 32k window: must reach the model in full.
+    # Leave tokenizer headroom in a 32k window while exceeding 16k tokens.
     monkeypatch.setattr(config, "OLLAMA_NUM_CTX", 32_768)
-    result = asyncio.run(ollama_client.chat_completion(_long_prompt(1_900), model=config.OLLAMA_DEFAULT_MODEL))
+    result = asyncio.run(ollama_client.chat_completion(_long_prompt(1_400), model=config.OLLAMA_DEFAULT_MODEL))
     if result.context_window < 32_768:
         pytest.skip(f"{config.OLLAMA_DEFAULT_MODEL} supporta solo {result.context_window} token di contesto")
-    assert result.usage["prompt_tokens"] > 25_000
+    assert result.usage["prompt_tokens"] > 20_000
     assert not result.truncated
 
 
